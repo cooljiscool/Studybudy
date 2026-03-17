@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KI Lernbegleiter</title>
+    <!-- Verhindert den Favicon 404 Fehler -->
+    <link rel="icon" href="data:,">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Markdown Styles for Chat */
+        .prose strong { color: #1e293b; font-weight: 600; }
+        .prose p { margin-bottom: 0.5rem; }
+        .prose p:last-child { margin-bottom: 0; }
+        .prose code { background: #e2e8f0; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.875em; }
+        .prose pre { background: #1e293b; color: #f8fafc; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin-bottom: 0.5rem; }
+        .prose pre code { background: transparent; padding: 0; color: inherit; }
+        .prose ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 0.5rem; }
+        
+        /* Fade in animation */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased h-screen flex overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white border-r border-slate-200 flex flex-col hidden md:flex">
+        <div class="p-6 border-b border-slate-200">
+            <h1 class="text-2xl font-bold text-blue-600 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-graduation-cap"><path d="M21.42 10.922a2 2 0 0 0-.019-3.138l-8.6-7.266a2 2 0 0 0-2.54 0l-8.6 7.266a2 2 0 0 0-.019 3.138l8.672 7.227a2 2 0 0 0 2.541 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>
+                LernKI
+            </h1>
+        </div>
+        <nav class="flex-1 p-4 space-y-2">
+            <button onclick="switchTab('dashboard')" id="nav-dashboard" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left bg-blue-50 text-blue-700 font-medium transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+                Dashboard
+            </button>
+            <button onclick="switchTab('generator')" id="nav-generator" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-slate-600 hover:bg-slate-50 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M3 12h18"/></svg>
+                Modul-Generator
+            </button>
+            <button onclick="switchTab('tutor')" id="nav-tutor" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-slate-600 hover:bg-slate-50 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
+                KI-Tutor Chat
+            </button>
+        </nav>
+        <div class="p-6 border-t border-slate-200">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
+                    XP
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500">Gesammelte XP</p>
+                    <p class="text-lg font-bold text-slate-800" id="sidebar-xp">0</p>
+                </div>
+            </div>
+            <p class="text-xs text-slate-400 mt-2">Berechnet via WASM ⚡</p>
+        </div>
+    </aside>
+
+    <!-- Mobile Header -->
+    <div class="md:hidden fixed top-0 left-0 right-0 bg-white border-b border-slate-200 p-4 flex justify-between items-center z-10">
+        <h1 class="text-xl font-bold text-blue-600 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a2 2 0 0 0-.019-3.138l-8.6-7.266a2 2 0 0 0-2.54 0l-8.6 7.266a2 2 0 0 0-.019 3.138l8.672 7.227a2 2 0 0 0 2.541 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>
+            LernKI
+        </h1>
+        <div class="flex gap-2">
+            <button onclick="switchTab('dashboard')" class="p-2 text-slate-600"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></button>
+            <button onclick="switchTab('generator')" class="p-2 text-slate-600"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M3 12h18"/></svg></button>
+            <button onclick="switchTab('tutor')" class="p-2 text-slate-600"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-full overflow-y-auto mt-16 md:mt-0 relative">
+        
+        <!-- Global Notification Area -->
+        <div id="toast-container" class="absolute top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+        <!-- Dashboard Tab -->
+        <div id="tab-dashboard" class="p-6 md:p-10 max-w-5xl mx-auto w-full fade-in">
+            <header class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800">Willkommen zurück! 👋</h2>
+                <p class="text-slate-500 mt-2">Hier ist dein aktueller Lernfortschritt.</p>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                    </div>
+                    <div>
+                        <p class="text-slate-500 text-sm">Aktive Module</p>
+                        <p class="text-2xl font-bold text-slate-800" id="stat-modules">0</p>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center text-green-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <div>
+                        <p class="text-slate-500 text-sm">Abgeschlossene Lektionen</p>
+                        <p class="text-2xl font-bold text-slate-800" id="stat-completed">0</p>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-lg bg-yellow-100 flex items-center justify-center text-yellow-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    </div>
+                    <div>
+                        <p class="text-slate-500 text-sm">Erfahrungspunkte (XP)</p>
+                        <p class="text-2xl font-bold text-slate-800" id="stat-xp">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-end mb-4">
+                <h3 class="text-xl font-bold text-slate-800">Deine Lernmodule</h3>
+                <button onclick="switchTab('generator')" class="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                    Neues Modul
+                </button>
+            </div>
+            
+            <div id="modules-container" class="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20">
+                <!-- Modules will be injected here -->
+                <div class="col-span-full text-center py-12 text-slate-400 border-2 border-dashed border-slate-200 rounded-xl" id="empty-modules-state">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-3"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                    <p>Noch keine Module vorhanden. Erstelle dein erstes Modul!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Generator Tab -->
+        <div id="tab-generator" class="p-6 md:p-10 max-w-4xl mx-auto w-full hidden fade-in">
+            <header class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800">Modul-Generator</h2>
+                <p class="text-slate-500 mt-2">Gib ein komplexes Thema ein, und die KI erstellt einen strukturierten Lernplan für dich.</p>
+            </header>
+
+            <div class="bg-white p-6 md:p-8 rounded-xl border border-slate-200 shadow-sm">
+                <label for="topic-input" class="block text-sm font-medium text-slate-700 mb-2">Was möchtest du lernen?</label>
+                <textarea id="topic-input" rows="5" class="w-full p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors resize-none" placeholder="Zum Beispiel: Erkläre mir die Grundlagen der Quantenphysik, inklusive Superposition und Verschränkung..."></textarea>
+                
+                <div class="mt-6 flex justify-end">
+                    <button id="btn-generate" onclick="generateModule()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+                        Lernmodul generieren
+                    </button>
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div id="generator-loading" class="hidden mt-8 text-center py-12">
+                <div class="loader mx-auto mb-4"></div>
+                <h3 class="text-lg font-medium text-slate-700">KI analysiert das Thema...</h3>
+                <p class="text-slate-500 text-sm">Dieser Vorgang kann einige Sekunden dauern.</p>
+            </div>
+        </div>
+
+        <!-- Tutor Chat Tab -->
+        <div id="tab-tutor" class="flex-1 flex flex-col hidden fade-in h-full relative">
+            <header class="p-6 border-b border-slate-200 bg-white shadow-sm z-10">
+                <h2 class="text-2xl font-bold text-slate-800">KI-Tutor</h2>
+                <p class="text-slate-500 text-sm">Stelle Fragen zu deinen Lernmodulen oder lass dir Konzepte erklären.</p>
+            </header>
+
+            <div id="chat-messages" class="flex-1 overflow-y-auto p-6 space-y-6 pb-32">
+                <!-- Initial Greeting -->
+                <div class="flex gap-4">
+                    <div class="w-10 h-10 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+                    </div>
+                    <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none px-5 py-4 shadow-sm max-w-[80%] prose prose-sm text-slate-700">
+                        <p>Hallo! Ich bin dein persönlicher KI-Tutor. Du kannst mir jederzeit Fragen stellen, wenn du bei einem Thema nicht weiterkommst, oder mich bitten, dir komplexe Sachverhalte einfacher zu erklären. Womit kann ich heute helfen?</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 md:p-6 pb-8 md:pb-6 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+                <div class="max-w-4xl mx-auto flex gap-3 relative">
+                    <textarea id="chat-input" rows="1" class="flex-1 p-4 pr-12 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none overflow-hidden bg-slate-50" placeholder="Schreibe eine Nachricht an deinen Tutor..." oninput="this.style.height = '';this.style.height = Math.min(this.scrollHeight, 150) + 'px'"></textarea>
+                    <button onclick="sendChatMessage()" class="absolute right-3 bottom-3 w-10 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-colors shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // --- System Configuration ---
+        const apiKey = "AIzaSyA7MqKdsy6CInFFOxapVnGgjWUWUaltNrs"; // Trage hier deinen Google Gemini API Key ein
+        
+        // WICHTIG: Wenn du die App lokal auf deinem Rechner nutzt (mit eigenem API Key), 
+        // musst du das Modell zu "gemini-2.5-flash" ändern.
+        // Das Modell "gemini-2.5-flash-preview-09-2025" ist nur für die integrierte Sandbox-Umgebung freigeschaltet.
+        
+        const modelName = apiKey ? "gemini-2.5-flash" : "gemini-2.5-flash-preview-09-2025";
+        const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+        // --- Application State ---
+        let appState = {
+            modules: [],
+            chatHistory: [],
+            xp: 0,
+            completedLessons: 0
+        };
+
+        // Load state from local storage (simulate persistency if reloaded, but keep simple)
+        try {
+            const saved = localStorage.getItem('lernki_state');
+            if (saved) appState = JSON.parse(saved);
+        } catch(e) { console.warn("Could not load state"); }
+
+        function saveState() {
+            localStorage.setItem('lernki_state', JSON.stringify(appState));
+        }
+
+        // --- WASM Integration ---
+        // A simple compiled WebAssembly module that exports an 'add' function.
+        // We use this to securely/efficiently calculate XP in a compiled context.
+        // WAT source: (module (func (export "add") (param i32 i32) (result i32) local.get 0 local.get 1 i32.add))
+        const wasmBase64 = "AGFzbQEAAAABBwFgAn9/AX8DAgEABwcBA2FkZAAACgkBBwAgACABags=";
+        let wasmInstance = null;
+
+        async function initWasm() {
+            try {
+                const binaryString = atob(wasmBase64);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                const result = await WebAssembly.instantiate(bytes);
+                wasmInstance = result.instance;
+                console.log("WASM Module erfolgreich geladen.");
+                updateDashboardStats();
+            } catch (error) {
+                console.error("WASM Initialisierungsfehler:", error);
+                showToast("Fehler beim Laden des XP-Moduls.", "error");
+            }
+        }
+
+        function calculateXP(currentXP, earnedXP) {
+            if (wasmInstance && wasmInstance.exports.add) {
+                // Call WASM function
+                return wasmInstance.exports.add(currentXP, earnedXP);
+            }
+            // Fallback just in case
+            return currentXP + earnedXP;
+        }
+
+        // --- UI Interactions ---
+
+        function switchTab(tabId) {
+            // Hide all tabs
+            document.getElementById('tab-dashboard').classList.add('hidden');
+            document.getElementById('tab-generator').classList.add('hidden');
+            document.getElementById('tab-tutor').classList.add('hidden');
+            
+            // Show target
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+
+            // Reset navigation styles
+            const navs = ['dashboard', 'generator', 'tutor'];
+            navs.forEach(nav => {
+                const el = document.getElementById(`nav-${nav}`);
+                if(el) {
+                    el.className = "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-slate-600 hover:bg-slate-50 transition-colors";
+                }
+            });
+
+            // Set active navigation style
+            const activeNav = document.getElementById(`nav-${tabId}`);
+            if(activeNav) {
+                activeNav.className = "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left bg-blue-50 text-blue-700 font-medium transition-colors";
+            }
+
+            if (tabId === 'dashboard') {
+                renderModules();
+                updateDashboardStats();
+            } else if (tabId === 'tutor') {
+                scrollToBottomChat();
+            }
+        }
+
+        function showToast(message, type = "success") {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const bgColor = type === 'error' ? 'bg-red-500' : 'bg-slate-800';
+            toast.className = `${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 fade-in transform transition-all duration-300`;
+            
+            const icon = type === 'error' 
+                ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`
+                : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+
+            toast.innerHTML = `${icon} <span class="text-sm font-medium">${message}</span>`;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // --- Utility: Markdown Parser ---
+        function parseMarkdown(text) {
+            if(!text) return "";
+            let html = text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code>$1</code>')
+                .replace(/\n\n/g, '</p><p>');
+            
+            // Very basic list handling
+            html = html.replace(/^- (.*)$/gm, '<li>$1</li>');
+            if (html.includes('<li>')) {
+                html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+            }
+            
+            return `<p>${html}</p>`;
+        }
+
+        // --- API Integration (Gemini with Exponential Backoff) ---
+        
+        async function callGeminiAPI(payload) {
+            if (!apiKey && modelName === "gemini-2.5-flash") {
+                showToast("API Key fehlt! Bitte im Code eintragen.", "error");
+                throw new Error("Missing API Key");
+            }
+
+            const maxRetries = 5;
+            const delays = [1000, 2000, 4000, 8000, 16000];
+
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(geminiEndpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error("API Fehler Response:", errorText);
+                        throw new Error(`HTTP Error: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    return data;
+                } catch (error) {
+                    if (i === maxRetries - 1) {
+                        console.error("API Call failed after retries:", error);
+                        throw error;
+                    }
+                    await new Promise(res => setTimeout(res, delays[i]));
+                }
+            }
+        }
+
+        // --- Feature: Module Generator ---
+
+        async function generateModule() {
+            const inputEl = document.getElementById('topic-input');
+            const topic = inputEl.value.trim();
+            
+            if (!topic) {
+                showToast("Bitte gib ein Thema ein.", "error");
+                return;
+            }
+
+            // UI State
+            document.getElementById('btn-generate').disabled = true;
+            document.getElementById('generator-loading').classList.remove('hidden');
+
+            const systemPrompt = "Du bist ein Didaktik-Experte und KI-Tutor. Der Nutzer gibt dir ein Thema. Fasse das Thema prägnant zusammen und erstelle einen strukturierten Lernplan mit Unterthemen. Du musst AUSSCHLIESSLICH im strikten JSON-Format antworten.";
+            
+            // Use Gemini Structured JSON output
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    title: { type: "STRING", description: "Ein kurzer, passender Titel für das Modul" },
+                    summary: { type: "STRING", description: "Eine 2-3 Sätze lange, verständliche Zusammenfassung des Themas." },
+                    subtopics: {
+                        type: "ARRAY",
+                        description: "3 bis 6 Lern-Unterthemen, die das Konzept in logische Schritte zerteilen.",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                title: { type: "STRING", description: "Titel der Lektion" },
+                                description: { type: "STRING", description: "Kurze Erklärung, was in dieser Lektion gelernt wird." }
+                            },
+                            required: ["title", "description"]
+                        }
+                    }
+                },
+                required: ["title", "summary", "subtopics"]
+            };
+
+            const payload = {
+                contents: [{ parts: [{ text: `Thema: ${topic}` }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: schema
+                }
+            };
+
+            try {
+                const result = await callGeminiAPI(payload);
+                const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                if (responseText) {
+                    const moduleData = JSON.parse(responseText);
+                    
+                    // Add local tracking data
+                    const newModule = {
+                        id: Date.now().toString(),
+                        title: moduleData.title,
+                        summary: moduleData.summary,
+                        subtopics: moduleData.subtopics.map(st => ({ ...st, completed: false }))
+                    };
+
+                    appState.modules.push(newModule);
+                    saveState();
+                    
+                    showToast("Lernmodul erfolgreich erstellt!");
+                    inputEl.value = "";
+                    switchTab('dashboard'); // Switch to view it
+                } else {
+                    throw new Error("Leere Antwort von der API.");
+                }
+            } catch (error) {
+                showToast("Fehler beim Generieren. Bitte überprüfe die Konsole (F12).", "error");
+            } finally {
+                document.getElementById('btn-generate').disabled = false;
+                document.getElementById('generator-loading').classList.add('hidden');
+            }
+        }
+
+        // --- Feature: Dashboard Rendering & Progress ---
+
+        function updateDashboardStats() {
+            document.getElementById('stat-modules').innerText = appState.modules.length;
+            document.getElementById('stat-completed').innerText = appState.completedLessons;
+            document.getElementById('stat-xp').innerText = appState.xp;
+            document.getElementById('sidebar-xp').innerText = appState.xp;
+        }
+
+        function toggleSubtopic(moduleId, subtopicIndex) {
+            const mod = appState.modules.find(m => m.id === moduleId);
+            if (!mod) return;
+
+            const st = mod.subtopics[subtopicIndex];
+            const wasCompleted = st.completed;
+            st.completed = !st.completed;
+
+            if (st.completed && !wasCompleted) {
+                // Earn XP using WASM!
+                appState.xp = calculateXP(appState.xp, 25); 
+                appState.completedLessons++;
+                showToast("+25 XP erhalten!");
+            } else if (!st.completed && wasCompleted) {
+                // Deduct XP (Fallback js logic)
+                appState.xp = Math.max(0, appState.xp - 25);
+                appState.completedLessons = Math.max(0, appState.completedLessons - 1);
+            }
+
+            saveState();
+            renderModules();
+            updateDashboardStats();
+        }
+
+        function deleteModule(moduleId) {
+            if(confirm("Möchtest du dieses Modul wirklich löschen?")) {
+                appState.modules = appState.modules.filter(m => m.id !== moduleId);
+                saveState();
+                renderModules();
+                updateDashboardStats();
+            }
+        }
+
+        function renderModules() {
+            const container = document.getElementById('modules-container');
+            const emptyState = document.getElementById('empty-modules-state');
+
+            if (appState.modules.length === 0) {
+                emptyState.style.display = 'block';
+                // Remove all other children except empty state
+                Array.from(container.children).forEach(child => {
+                    if (child.id !== 'empty-modules-state') child.remove();
+                });
+                return;
+            }
+
+            emptyState.style.display = 'none';
+            container.innerHTML = ''; // Clear container
+
+            appState.modules.slice().reverse().forEach(mod => {
+                const total = mod.subtopics.length;
+                const completed = mod.subtopics.filter(s => s.completed).length;
+                const progressPercentage = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+                const modEl = document.createElement('div');
+                modEl.className = 'bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col fade-in';
+                
+                let subtopicsHTML = mod.subtopics.map((st, index) => `
+                    <div class="flex items-start gap-3 p-3 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer group" onclick="toggleSubtopic('${mod.id}', ${index})">
+                        <div class="mt-0.5 w-5 h-5 rounded border ${st.completed ? 'bg-green-500 border-green-500 text-white' : 'border-slate-300 bg-white group-hover:border-blue-400'} flex items-center justify-center flex-shrink-0 transition-colors">
+                            ${st.completed ? '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium ${st.completed ? 'text-slate-500 line-through' : 'text-slate-800'}">${st.title}</p>
+                            <p class="text-xs text-slate-500 mt-0.5 line-clamp-2">${st.description}</p>
+                        </div>
+                    </div>
+                `).join('');
+
+                modEl.innerHTML = `
+                    <div class="p-5 border-b border-slate-100 bg-slate-50/50 relative">
+                        <button onclick="deleteModule('${mod.id}')" class="absolute top-4 right-4 text-slate-400 hover:text-red-500 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                        </button>
+                        <h4 class="font-bold text-lg text-slate-800 pr-8">${mod.title}</h4>
+                        <p class="text-sm text-slate-600 mt-2 line-clamp-2">${mod.summary}</p>
+                        
+                        <div class="mt-4 flex items-center gap-3">
+                            <div class="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                <div class="h-full bg-blue-500 transition-all duration-500 ease-out" style="width: ${progressPercentage}%"></div>
+                            </div>
+                            <span class="text-xs font-medium text-slate-500 w-8 text-right">${progressPercentage}%</span>
+                        </div>
+                    </div>
+                    <div class="p-3 space-y-1 flex-1 overflow-y-auto max-h-64 custom-scrollbar">
+                        ${subtopicsHTML}
+                    </div>
+                `;
+                container.appendChild(modEl);
+            });
+        }
+
+        // --- Feature: AI Tutor Chat ---
+
+        function appendMessage(text, isUser = false) {
+            const container = document.getElementById('chat-messages');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `flex gap-4 fade-in ${isUser ? 'flex-row-reverse' : ''}`;
+            
+            const avatar = isUser 
+                ? `<div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-slate-600"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>`
+                : `<div class="w-10 h-10 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg></div>`;
+
+            const bgClass = isUser ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white border border-slate-200 text-slate-700 rounded-tl-none';
+            const textContent = isUser ? text : parseMarkdown(text);
+
+            msgDiv.innerHTML = `
+                ${avatar}
+                <div class="${bgClass} rounded-2xl px-5 py-4 shadow-sm max-w-[80%] prose prose-sm ${isUser ? 'prose-invert' : ''}">
+                    ${isUser ? `<p>${text}</p>` : textContent}
+                </div>
+            `;
+            
+            container.appendChild(msgDiv);
+            scrollToBottomChat();
+        }
+
+        function scrollToBottomChat() {
+            const container = document.getElementById('chat-messages');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function addTypingIndicator() {
+            const container = document.getElementById('chat-messages');
+            const id = 'typing-' + Date.now();
+            const msgDiv = document.createElement('div');
+            msgDiv.id = id;
+            msgDiv.className = `flex gap-4 fade-in`;
+            msgDiv.innerHTML = `
+                <div class="w-10 h-10 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none px-5 py-4 shadow-sm flex items-center gap-1.5">
+                    <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 0ms"></div>
+                    <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 150ms"></div>
+                    <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 300ms"></div>
+                </div>
+            `;
+            container.appendChild(msgDiv);
+            scrollToBottomChat();
+            return id;
+        }
+
+        function removeTypingIndicator(id) {
+            const el = document.getElementById(id);
+            if(el) el.remove();
+        }
+
+        async function sendChatMessage() {
+            const inputEl = document.getElementById('chat-input');
+            const text = inputEl.value.trim();
+            
+            if (!text) return;
+
+            // Update UI User
+            inputEl.value = '';
+            inputEl.style.height = ''; // Reset height
+            appendMessage(text, true);
+
+            // Add to history
+            appState.chatHistory.push({ role: "user", parts: [{ text: text }] });
+
+            const indicatorId = addTypingIndicator();
+
+            const systemPrompt = "Du bist ein hilfreicher, geduldiger und ermutigender KI-Tutor. Du sprichst Deutsch. Erkläre Konzepte einfach, verständlich und strukturiert. Verwende Markdown für Hervorhebungen.";
+
+            // Format history for API (Keep last 10 messages to save context limits)
+            const apiContents = appState.chatHistory.slice(-10);
+
+            const payload = {
+                contents: apiContents,
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+
+            try {
+                const result = await callGeminiAPI(payload);
+                const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                removeTypingIndicator(indicatorId);
+
+                if (responseText) {
+                    appendMessage(responseText, false);
+                    appState.chatHistory.push({ role: "model", parts: [{ text: responseText }] });
+                    saveState();
+                } else {
+                    throw new Error("Keine Antwort erhalten.");
+                }
+            } catch (error) {
+                removeTypingIndicator(indicatorId);
+                showToast("Der Tutor ist gerade nicht erreichbar. Versuche es später erneut.", "error");
+            }
+        }
+
+        // Handle Enter key in chat (Shift+Enter for new line)
+        document.getElementById('chat-input').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendChatMessage();
+            }
+        });
+
+        // --- Initialization ---
+        window.onload = () => {
+            initWasm(); // Initialize the WASM module
+            
+            // Initial UI render
+            if(appState.modules.length > 0) {
+                renderModules();
+                updateDashboardStats();
+            }
+            
+            // Re-render chat history if exists (skip the default greeting to keep it simple, just load history)
+            if(appState.chatHistory.length > 0) {
+                document.getElementById('chat-messages').innerHTML = ''; // clear default
+                appState.chatHistory.forEach(msg => {
+                    appendMessage(msg.parts[0].text, msg.role === 'user');
+                });
+            }
+        };
+
+    </script>
+</body>
+</html>
